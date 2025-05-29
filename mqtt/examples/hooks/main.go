@@ -24,7 +24,7 @@ var psTopic pubsub.Topic
 
 func main() {
 
-	// Luke wrote this
+	// Luke wrote this again
 	psClient, err := newPubSubClient("substation-data-streams-dev")
 	if err != nil {
 		log.Fatalf("Unable to build pubsub client")
