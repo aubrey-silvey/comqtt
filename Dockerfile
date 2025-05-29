@@ -11,12 +11,12 @@ RUN go mod download
 
 COPY . ./
 
-RUN go build -o /app/comqtt ./cmd/single
-RUN go build -o /app/comqtt-cluster ./cmd/cluster
+RUN go build -o /app/comqtt ./mqtt/examples/hooks
+#RUN go build -o /app/comqtt-cluster ./cmd/cluster
 
 FROM alpine
 
 WORKDIR /
-COPY --from=builder /app/comqtt /app/comqtt-cluster ./
-
+COPY --from=builder /app/comqtt ./ 
+#/app/comqtt-cluster ./
 ENTRYPOINT [ "/comqtt" ]

@@ -6,20 +6,32 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
+	"cloud.google.com/go/pubsub"
 	"github.com/wind-c/comqtt/v2/mqtt"
 	"github.com/wind-c/comqtt/v2/mqtt/hooks/auth"
 	"github.com/wind-c/comqtt/v2/mqtt/listeners"
 	"github.com/wind-c/comqtt/v2/mqtt/packets"
 )
 
+var psTopic pubsub.Topic
+
 func main() {
+
+	// Luke wrote this
+	psClient, err := newPubSubClient("substation-data-streams-dev")
+	if err != nil {
+		log.Fatalf("Unable to build pubsub client")
+		os.Exit(1)
+	}
+	psTopic = *psClient.Topic("substation-incoming-site-dev")
+
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -31,7 +43,7 @@ func main() {
 	server := mqtt.New(nil)
 	_ = server.AddHook(new(auth.AllowHook), nil)
 	tcp := listeners.NewTCP("t1", ":1883", nil)
-	err := server.AddListener(tcp)
+	err = server.AddListener(tcp)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,34 +64,34 @@ func main() {
 	// Demonstration of directly publishing messages to a topic via the
 	// `server.Publish` method. Subscribe to `direct/publish` using your
 	// MQTT client to see the messages.
-	go func() {
-		cl := server.NewClient(nil, "local", "inline", true)
-		for range time.Tick(time.Second * 1) {
-			err := server.InjectPacket(cl, packets.Packet{
-				FixedHeader: packets.FixedHeader{
-					Type: packets.Publish,
-				},
-				TopicName: "direct/publish",
-				Payload:   []byte("injected scheduled message"),
-			})
-			if err != nil {
-				server.Log.Error("server.InjectPacket", "error", err)
-			}
-			server.Log.Info("main.go injected packet to direct/publish")
-		}
-	}()
+	// go func() {
+	// 	cl := server.NewClient(nil, "local", "inline", true)
+	// 	for range time.Tick(time.Second * 1) {
+	// 		err := server.InjectPacket(cl, packets.Packet{
+	// 			FixedHeader: packets.FixedHeader{
+	// 				Type: packets.Publish,
+	// 			},
+	// 			TopicName: "direct/publish",
+	// 			Payload:   []byte("injected scheduled message"),
+	// 		})
+	// 		if err != nil {
+	// 			server.Log.Error("server.InjectPacket", "error", err)
+	// 		}
+	// 		server.Log.Info("main.go injected packet to direct/publish")
+	// 	}
+	// }()
 
 	// There is also a shorthand convenience function, Publish, for easily sending
 	// publish packets if you are not concerned with creating your own packets.
-	go func() {
-		for range time.Tick(time.Second * 5) {
-			err := server.Publish("direct/publish", []byte("packet scheduled message"), false, 0)
-			if err != nil {
-				server.Log.Error("server.Publish", "error", err)
-			}
-			server.Log.Info("main.go issued direct message to direct/publish")
-		}
-	}()
+	// go func() {
+	// 	for range time.Tick(time.Second * 5) {
+	// 		err := server.Publish("direct/publish", []byte("packet scheduled message"), false, 0)
+	// 		if err != nil {
+	// 			server.Log.Error("server.Publish", "error", err)
+	// 		}
+	// 		server.Log.Info("main.go issued direct message to direct/publish")
+	// 	}
+	// }()
 
 	<-done
 	server.Log.Warn("caught signal, stopping...")
@@ -146,5 +158,24 @@ func (h *ExampleHook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.Pac
 }
 
 func (h *ExampleHook) OnPublished(cl *mqtt.Client, pk packets.Packet) {
-	h.Log.Info("published to client", "client", cl.ID, "payload", string(pk.Payload))
+	h.Log.Info("Recieved Message")
+
+	status := psTopic.Publish(context.Background(), &pubsub.Message{
+		Data:       pk.Payload,
+		Attributes: map[string]string{"path": pk.TopicName},
+	})
+
+	<-status.Ready()
+	_, err := status.Get(context.Background())
+	if err != nil {
+		h.Log.Info("PUBSUB Publish Error:", err.Error())
+	}
+	h.Log.Info("Message Published")
+	// TODO: Check for publish errors.
+}
+
+// Luke wrote this
+func newPubSubClient(topic string) (*pubsub.Client, error) {
+	client, err := pubsub.NewClient(context.Background(), topic)
+	return client, err
 }
