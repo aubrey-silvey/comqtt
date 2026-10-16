@@ -19,7 +19,7 @@ jobs:
 
       - name: Docker compose up
         run: |
-          docker compose up -d
+          docker compose -f docker-compose-old.yaml.0 up -d
 
           until docker exec mysql mysqladmin ping -h "127.0.0.1" --silent; do
             echo 'waiting for mysql...'
