@@ -168,7 +168,7 @@ func (h *ExampleHook) OnPublished(cl *mqtt.Client, pk packets.Packet) {
 	<-status.Ready()
 	_, err := status.Get(context.Background())
 	if err != nil {
-		h.Log.Info("PUBSUB Publish Error:", err.Error())
+		h.Log.Error("PUBSUB Publish Error", "error", err)
 	}
 	h.Log.Info("Message Published")
 	// TODO: Check for publish errors.
